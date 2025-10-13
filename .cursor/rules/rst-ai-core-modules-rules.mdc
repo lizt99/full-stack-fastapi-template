@@ -1,0 +1,716 @@
+---
+alwaysApply: true
+---
+## 📁 模块结构规范 (Module Structure Standards)
+
+### ✅ 必须遵守的目录结构
+```
+app/modules/{module_name}/
+├── __init__.py              # 必须: 模块导出
+├── module.py               # 必须: 模块主类定义
+├── models.py               # 必须: 数据模型定义
+├── routes.py               # 可选: 自定义路由 (如不使用CRUDModule)
+├── crud.py                 # 可选: 自定义CRUD操作
+├── migrations/             # 必须: 数据库迁移目录
+│   ├── __init__.py
+│   └── {version}_{description}.py
+└── tests/                  # 推荐: 模块专用测试 (可选)
+    ├── __init__.py
+    ├── test_models.py
+    ├── test_routes.py
+    └── test_crud.py
+```
+
+### ❌ 禁止的结构
+- 不得在模块根目录放置配置文件
+- 不得创建超过3层的子目录嵌套
+- 不得使用非标准文件扩展名
+
+---
+
+## 📝 命名约定 (Naming Conventions)
+
+### ✅ 强制命名规则
+
+#### 模块名称
+- **格式**: 小写字母 + 下划线
+- **示例**: `trading_view`, `user_management`, `data_analysis`
+- **禁止**: 驼峰命名、中划线、数字开头
+
+#### 数据模型类名
+- **格式**: PascalCase，以业务实体命名
+- **示例**: `TradingView`, `UserProfile`, `DataSource`
+- **后缀**: 
+  - 基础模型: 无后缀
+  - 创建模型: `Create` 后缀
+  - 更新模型: `Update` 后缀  
+  - 公开模型: `Public` 后缀
+  - 列表模型: 复数形式 + `Public` 后缀
+
+#### 模块类名
+- **格式**: PascalCase + `Module` 后缀
+- **示例**: `TradingViewModule`, `UserManagementModule`
+
+#### API路由前缀
+- **格式**: 与模块名一致的小写形式
+- **示例**: `/trading-view`, `/user-management`
+
+---
+
+## 🏗️ 模块类开发规范 (Module Class Standards)
+
+### ✅ 必须实现的基础结构
+
+```python
+class {ModuleName}Module(CRUDModule):  # 或继承BaseModule
+    """
+    必须: 完整的模块文档字符串
+    描述模块功能、依赖关系、配置选项
+    """
+    
+    def __init__(self):
+        # 必须: 调用父类构造函数
+        super().__init__(name="module_name", prefix="/module-name")
+        
+        # 必须: 声明依赖关系
+        self.dependencies = ["core"]  # 明确依赖的其他模块
+        
+        # 可选: 模块提供的功能
+        self.provides = ["specific_functionality"]
+        
+        # 可选: 模块配置
+        self.config = {
+            "max_items_per_user": 100,
+            "enable_feature_x": True
+        }
+    
+    def get_router(self) -> APIRouter:
+        """必须: 返回模块路由"""
+        return self.router
+    
+    def get_models(self) -> List[Type[SQLModel]]:
+        """必须: 返回模块数据模型列表"""
+        return [MainModel, CreateModel, UpdateModel, PublicModel]
+    
+    @property
+    def migration_path(self) -> str:
+        """必须: 返回迁移文件路径"""
+        return f"app/modules/{self.name}/migrations"
+    
+    def on_enable(self):
+        """可选: 模块启用时的回调"""
+        pass
+    
+    def on_disable(self):
+        """可选: 模块禁用时的回调"""
+        pass
+```
+
+### ❌ 禁止的实现方式
+- 不得在`__init__`中执行重量级操作
+- 不得在模块类中硬编码配置值
+- 不得直接导入其他模块的内部组件
+
+---
+
+## 🗃️ 数据模型规范 (Data Model Standards)
+
+### ✅ 必须遵守的模型结构
+
+```python
+# 1. 基础模型 - 共享字段
+class {Entity}Base(SQLModel):
+    """必须: 完整的模型文档字符串"""
+    field1: str = Field(max_length=255, description="字段描述")
+    field2: Optional[str] = Field(default=None, description="可选字段描述")
+
+# 2. 数据库模型 - 表定义
+class {Entity}({Entity}Base, table=True):
+    """数据库表模型"""
+    __tablename__ = "table_name"  # 必须: 明确指定表名
+    
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    owner_id: uuid.UUID = Field(foreign_key="user.id", nullable=False, ondelete="CASCADE")
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: Optional[datetime] = Field(default=None)
+
+# 3. 创建模型 - API输入
+class {Entity}Create({Entity}Base):
+    """创建时的输入模型"""
+    pass
+
+# 4. 更新模型 - API更新
+class {Entity}Update(SQLModel):
+    """更新时的输入模型"""
+    field1: Optional[str] = Field(default=None, max_length=255)
+    field2: Optional[str] = Field(default=None)
+
+# 5. 公开模型 - API输出
+class {Entity}Public({Entity}Base):
+    """公开展示的模型"""
+    id: uuid.UUID
+    owner_id: uuid.UUID
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+# 6. 列表模型 - 列表响应
+class {Entity}sPublic(SQLModel):
+    """列表响应模型"""
+    data: List[{Entity}Public]
+    count: int
+```
+
+### ❌ 禁止的模型设计
+- 不得使用整数作为主键 (必须使用UUID)
+- 不得省略外键约束和级联删除设置
+- 不得在模型中包含业务逻辑方法
+- 不得使用可变类型作为默认值
+
+---
+
+## 🛣️ API路由规范 (API Routes Standards)
+
+### ✅ 使用CRUDModule的标准路由 (推荐)
+
+```python
+class {Module}Module(CRUDModule):
+    def _setup_router(self):
+        """设置CRUD路由"""
+        # 使用基类的自动CRUD路由生成
+        self.setup_crud_routes(
+            model_class={Entity},
+            create_model={Entity}Create,
+            update_model={Entity}Update,
+            public_model={Entity}Public
+        )
+        
+        # 添加自定义路由
+        self._setup_custom_routes()
+    
+    def _setup_custom_routes(self):
+        """添加自定义路由"""
+        from app.api.deps import CurrentUser, SessionDep
+        
+        @self.router.get("/search", response_model={Entity}sPublic)
+        def search_entities(
+            session: SessionDep,
+            current_user: CurrentUser,
+            q: str = "",
+            skip: int = 0,
+            limit: int = 100
+        ) -> Any:
+            """搜索功能 - 必须包含完整文档字符串"""
+            # 实现搜索逻辑
+            pass
+```
+
+### ✅ 自定义路由规范 (仅在必要时使用)
+
+如果不使用CRUDModule，必须手动实现以下标准端点：
+
+```python
+# routes.py
+from fastapi import APIRouter, HTTPException, Depends
+from app.api.deps import CurrentUser, SessionDep
+
+router = APIRouter()
+
+@router.post("/", response_model={Entity}Public)
+def create_entity(*, session: SessionDep, current_user: CurrentUser, entity_in: {Entity}Create):
+    """创建实体 - 必须包含权限检查"""
+    pass
+
+@router.get("/", response_model={Entity}sPublic)  
+def read_entities(session: SessionDep, current_user: CurrentUser, skip: int = 0, limit: int = 100):
+    """获取实体列表 - 必须支持分页"""
+    pass
+
+@router.get("/{id}", response_model={Entity}Public)
+def read_entity(*, session: SessionDep, current_user: CurrentUser, id: uuid.UUID):
+    """获取单个实体 - 必须检查权限"""
+    pass
+
+@router.put("/{id}", response_model={Entity}Public)
+def update_entity(*, session: SessionDep, current_user: CurrentUser, id: uuid.UUID, entity_in: {Entity}Update):
+    """更新实体 - 必须检查所有权"""
+    pass
+
+@router.delete("/{id}")
+def delete_entity(*, session: SessionDep, current_user: CurrentUser, id: uuid.UUID):
+    """删除实体 - 必须检查所有权"""
+    pass
+```
+
+### ❌ 路由开发禁止事项
+- 不得跳过用户认证 (除非是公开端点)
+- 不得忽略权限检查
+- 不得返回敏感信息 (如密码哈希)
+- 不得使用同步数据库操作在异步路由中
+
+---
+
+## 🧪 测试规范 (Testing Standards)
+
+### ✅ 必须创建的测试文件
+
+```
+tests/
+├── utils/{module_name}.py          # 必须: 测试工具函数
+└── api/routes/test_{module_name}.py # 必须: API路由测试
+```
+
+### ✅ 必须包含的测试用例 (最低要求)
+
+```python
+# tests/api/routes/test_{module_name}.py
+
+def test_create_{entity}(client: TestClient, superuser_token_headers: dict[str, str]):
+    """必须: 测试创建操作"""
+    pass
+
+def test_read_{entity}(client: TestClient, superuser_token_headers: dict[str, str], db: Session):
+    """必须: 测试读取单个实体"""
+    pass
+
+def test_read_{entity}s(client: TestClient, superuser_token_headers: dict[str, str], db: Session):
+    """必须: 测试列表查询"""
+    pass
+
+def test_update_{entity}(client: TestClient, superuser_token_headers: dict[str, str], db: Session):
+    """必须: 测试更新操作"""
+    pass
+
+def test_delete_{entity}(client: TestClient, superuser_token_headers: dict[str, str], db: Session):
+    """必须: 测试删除操作"""
+    pass
+
+def test_read_{entity}_not_found(client: TestClient, superuser_token_headers: dict[str, str]):
+    """必须: 测试404错误"""
+    pass
+
+def test_read_{entity}_not_enough_permissions(client: TestClient, normal_user_token_headers: dict[str, str], db: Session):
+    """必须: 测试权限控制"""
+    pass
+```
+
+### ✅ 测试工具函数规范
+
+```python
+# tests/utils/{module_name}.py
+
+def create_random_{entity}(db: Session) -> {Entity}:
+    """必须: 创建随机测试实体"""
+    user = create_random_user(db)
+    entity_in = {Entity}Create(
+        field1=random_lower_string(),
+        field2=random_lower_string()
+    )
+    entity = {Entity}.model_validate(entity_in, update={"owner_id": user.id})
+    db.add(entity)
+    db.commit()
+    db.refresh(entity)
+    return entity
+
+def create_random_{entity}_data() -> dict[str, str]:
+    """必须: 创建随机测试数据"""
+    return {
+        "field1": random_lower_string(),
+        "field2": random_lower_string()
+    }
+```
+
+### ❌ 测试禁止事项
+- 不得跳过权限测试
+- 不得使用硬编码的测试数据
+- 不得在测试中留下数据残留
+- 不得忽略错误场景测试
+
+---
+
+## 🗂️ 数据库迁移规范 (Database Migration Standards)
+
+### ✅ 迁移文件命名规范
+```
+migrations/{version}_{description}.py
+```
+- `version`: 3位数字递增 (001, 002, 003...)
+- `description`: 简短的英文描述，使用下划线分隔
+
+### ✅ 迁移内容规范
+
+```python
+# migrations/001_initial_{module_name}_table.py
+"""
+初始{模块名}表创建
+
+创建时间: 2024-10-13
+描述: 创建{entity}表和相关索引
+"""
+
+from alembic import op
+import sqlalchemy as sa
+import sqlmodel
+from sqlalchemy.dialects import postgresql
+
+# 修订版本信息
+revision = '001'
+down_revision = None  # 如果依赖其他迁移，在此指定
+branch_labels = None
+depends_on = None
+
+def upgrade():
+    """升级数据库结构"""
+    # 创建表
+    op.create_table(
+        '{table_name}',
+        sa.Column('id', postgresql.UUID(as_uuid=True), nullable=False, default=sa.text('gen_random_uuid()')),
+        sa.Column('owner_id', postgresql.UUID(as_uuid=True), nullable=False),
+        sa.Column('field1', sa.String(length=255), nullable=False),
+        sa.Column('field2', sa.String(length=255), nullable=True),
+        sa.Column('created_at', sa.DateTime(), nullable=False, default=sa.text('now()')),
+        sa.Column('updated_at', sa.DateTime(), nullable=True),
+        sa.PrimaryKeyConstraint('id'),
+        sa.ForeignKeyConstraint(['owner_id'], ['user.id'], ondelete='CASCADE'),
+    )
+    
+    # 创建索引
+    op.create_index('ix_{table_name}_owner_id', '{table_name}', ['owner_id'])
+    op.create_index('ix_{table_name}_created_at', '{table_name}', ['created_at'])
+
+def downgrade():
+    """降级数据库结构"""
+    op.drop_index('ix_{table_name}_created_at')
+    op.drop_index('ix_{table_name}_owner_id')
+    op.drop_table('{table_name}')
+```
+
+### ❌ 迁移禁止事项
+- 不得在迁移中删除生产数据
+- 不得创建没有downgrade的迁移
+- 不得在迁移中执行长时间运行的操作
+- 不得忽略外键约束和索引
+
+---
+
+## 📚 文档规范 (Documentation Standards)
+
+### ✅ 必须创建的文档文件
+
+```
+docs/modules/{module_name}/
+├── README.md              # 必须: 模块概述
+├── API.md                 # 必须: API文档  
+├── MODELS.md              # 必须: 数据模型文档
+└── EXAMPLES.md            # 推荐: 使用示例
+```
+
+### ✅ README.md 必须包含的内容
+
+```markdown
+# {Module Name} 模块
+
+## 概述
+简要描述模块功能和用途
+
+## 功能特性
+- 功能1: 详细描述
+- 功能2: 详细描述  
+
+## 依赖关系
+- 依赖模块: core, other_module
+- 外部依赖: package_name >= 1.0.0
+
+## 配置选项
+| 选项名 | 类型 | 默认值 | 描述 |
+|--------|------|--------|------|
+| option1 | str | "default" | 选项描述 |
+
+## 数据模型
+- MainModel: 主要数据模型
+- CreateModel: 创建时的输入模型
+
+## API端点
+| 方法 | 路径 | 描述 |
+|------|------|------|
+| POST | /{module}/ | 创建新记录 |
+| GET | /{module}/ | 获取记录列表 |
+
+## 使用示例
+```python
+# 代码示例
+```
+
+## 注意事项
+重要的使用注意事项和限制
+```
+
+---
+
+## 🔧 开发工作流规范 (Development Workflow Standards)
+
+### ✅ 新模块开发流程
+
+1. **规划阶段**
+   - [ ] 确定模块名称和功能范围
+   - [ ] 分析依赖关系
+   - [ ] 设计数据模型
+   - [ ] 规划API端点
+
+2. **实现阶段**
+   - [ ] 创建模块目录结构
+   - [ ] 实现数据模型 (models.py)
+   - [ ] 实现模块类 (module.py)
+   - [ ] 创建数据库迁移
+   - [ ] 实现API路由 (如需自定义)
+
+3. **测试阶段**
+   - [ ] 编写测试工具函数
+   - [ ] 编写API测试用例
+   - [ ] 运行完整测试套件
+   - [ ] 确保所有测试通过
+
+4. **文档阶段**
+   - [ ] 编写模块文档
+   - [ ] 更新API文档
+   - [ ] 创建使用示例
+
+5. **集成阶段**
+   - [ ] 更新配置文件 (config.py)
+   - [ ] 注册模块到系统
+   - [ ] 运行集成测试
+   - [ ] 更新部署文档
+
+### ✅ 模块修改流程
+
+1. **变更评估**
+   - [ ] 评估变更影响范围
+   - [ ] 检查向后兼容性
+   - [ ] 确定是否需要迁移
+
+2. **实现变更**
+   - [ ] 修改相关代码
+   - [ ] 更新数据模型 (如需要)
+   - [ ] 创建数据库迁移 (如需要)
+
+3. **测试验证**
+   - [ ] 更新测试用例
+   - [ ] 运行完整测试
+   - [ ] 验证向后兼容性
+
+4. **文档更新**
+   - [ ] 更新模块文档
+   - [ ] 更新版本号
+   - [ ] 记录变更日志
+
+---
+
+## 🚫 严格禁止事项 (Strict Prohibitions)
+
+### ❌ 架构层面禁止
+1. **不得绕过模块系统**: 禁止直接导入其他模块的内部组件
+2. **不得硬编码依赖**: 禁止在代码中硬编码其他模块的路径或配置
+3. **不得违反单一职责**: 每个模块只能负责一个业务领域
+4. **不得创建循环依赖**: 模块间不得相互依赖
+
+### ❌ 数据层面禁止  
+1. **不得跳过权限检查**: 所有数据操作必须验证用户权限
+2. **不得使用原生SQL**: 除非在迁移文件中，否则禁止使用原生SQL
+3. **不得忽略数据验证**: 所有输入数据必须通过模型验证
+4. **不得泄露敏感信息**: API响应不得包含敏感数据
+
+### ❌ 代码质量禁止
+1. **不得忽略异常处理**: 所有可能的异常必须适当处理
+2. **不得使用魔法数字**: 所有常量必须定义为配置项
+3. **不得缺少文档字符串**: 所有公开的类和函数必须有文档
+4. **不得提交未测试代码**: 所有代码变更必须有对应测试
+
+### ❌ 安全层面禁止
+1. **不得跳过输入验证**: 所有外部输入必须验证
+2. **不得记录敏感信息**: 日志中不得记录密码、令牌等敏感信息
+3. **不得忽略CORS设置**: API端点必须正确配置CORS
+4. **不得使用弱加密**: 禁止使用MD5、SHA1等弱加密算法
+
+---
+
+## ✅ 代码审查检查清单 (Code Review Checklist)
+
+### 🔍 模块结构检查
+- [ ] 目录结构符合规范
+- [ ] 文件命名符合约定
+- [ ] 模块依赖关系明确
+- [ ] 配置项合理设置
+
+### 🔍 代码质量检查
+- [ ] 所有函数有文档字符串
+- [ ] 异常处理完整
+- [ ] 输入验证充分
+- [ ] 权限检查到位
+
+### 🔍 数据模型检查
+- [ ] 使用UUID作为主键
+- [ ] 外键约束正确设置
+- [ ] 字段长度限制合理
+- [ ] 索引设置适当
+
+### 🔍 API接口检查
+- [ ] 端点命名规范
+- [ ] 响应格式统一
+- [ ] 错误码标准化
+- [ ] 文档完整
+
+### 🔍 测试覆盖检查
+- [ ] CRUD操作全覆盖
+- [ ] 权限测试完整
+- [ ] 错误场景测试
+- [ ] 边界条件测试
+
+### 🔍 安全性检查
+- [ ] 输入验证充分
+- [ ] 权限控制严格
+- [ ] 敏感信息保护
+- [ ] SQL注入防护
+
+---
+
+## 📈 性能和监控规范 (Performance & Monitoring Standards)
+
+### ✅ 性能要求
+- **API响应时间**: 95%的请求响应时间 < 200ms
+- **数据库查询**: 避免N+1查询问题
+- **内存使用**: 单个请求内存使用 < 50MB
+- **并发处理**: 支持至少100个并发请求
+
+### ✅ 监控指标
+```python
+# 在模块中添加监控装饰器
+from app.core.monitoring import monitor_api_performance
+
+@monitor_api_performance
+@router.get("/")
+def read_entities():
+    """自动监控API性能"""
+    pass
+```
+
+### ✅ 日志规范
+```python
+import logging
+
+logger = logging.getLogger(f"app.modules.{__name__}")
+
+def some_operation():
+    logger.info("开始执行操作", extra={"module": "module_name", "operation": "operation_name"})
+    try:
+        # 业务逻辑
+        logger.debug("操作详细信息", extra={"details": "..."})
+    except Exception as e:
+        logger.error("操作失败", extra={"error": str(e), "traceback": traceback.format_exc()})
+        raise
+```
+
+---
+
+## 🔄 版本管理和发布规范 (Version Management & Release Standards)
+
+### ✅ 版本号规范
+- **格式**: MAJOR.MINOR.PATCH (语义化版本)
+- **MAJOR**: 不兼容的API变更
+- **MINOR**: 向下兼容的功能新增
+- **PATCH**: 向下兼容的问题修复
+
+### ✅ 变更日志规范
+```markdown
+# 变更日志
+
+## [1.2.0] - 2024-10-13
+
+### 新增
+- 添加搜索功能
+- 支持批量操作
+
+### 修改  
+- 优化查询性能
+- 更新API文档
+
+### 修复
+- 修复权限检查问题
+- 解决并发安全问题
+
+### 删除
+- 移除废弃的API端点
+```
+
+---
+
+## 🎯 质量门禁 (Quality Gates)
+
+### ✅ 提交前必须满足的条件
+1. **代码质量**
+   - [ ] 代码审查通过
+   - [ ] 静态代码检查无错误
+   - [ ] 代码覆盖率 >= 80%
+
+2. **功能测试**
+   - [ ] 所有单元测试通过
+   - [ ] API集成测试通过
+   - [ ] 性能测试满足要求
+
+3. **安全检查**
+   - [ ] 安全扫描无高危问题
+   - [ ] 依赖漏洞检查通过
+   - [ ] 敏感信息泄露检查通过
+
+4. **文档完整**
+   - [ ] API文档完整
+   - [ ] 代码注释充分
+   - [ ] 使用说明清晰
+
+---
+
+## 📞 违规处理和支持 (Violation Handling & Support)
+
+### 🚨 违规等级和处理
+- **严重违规** (安全、数据完整性): 立即回滚，重新开发
+- **重要违规** (架构、性能): 必须在下个版本修复
+- **一般违规** (代码质量、文档): 必须在两个版本内修复
+- **轻微违规** (命名、格式): 逐步改进
+
+### 📞 技术支持和咨询
+- **架构设计问题**: 联系架构团队
+- **性能优化建议**: 联系性能团队  
+- **安全相关问题**: 联系安全团队
+- **测试策略咨询**: 联系测试团队
+
+---
+
+## 📋 附录 (Appendix)
+
+### 📚 相关资源
+- [FastAPI官方文档](https://fastapi.tiangolo.com/)
+- [SQLModel文档](https://sqlmodel.tiangolo.com/)
+- [Pydantic文档](https://pydantic-docs.helpmanual.io/)
+- [项目架构文档](./backend/MODULAR_ARCHITECTURE.md)
+
+### 🛠️ 开发工具推荐
+- **IDE**: VSCode + Python扩展
+- **代码格式化**: Black, isort
+- **静态检查**: mypy, flake8
+- **测试工具**: pytest, pytest-cov
+
+### 📝 模板文件
+- [模块模板](./templates/module_template/)
+- [测试模板](./templates/test_template/)
+- [文档模板](./templates/docs_template/)
+
+---
+
+**声明**: 本规范是强制性的开发标准，所有模块开发必须严格遵守。违反规范的代码将不被接受。
+
+**最后更新**: 2024-10-13  
+**审核状态**: 已批准  
+**生效范围**: 全项目强制执行  
+
+---
+
+*RST AI Core Development Team*  
+*© 2024 All Rights Reserved*
