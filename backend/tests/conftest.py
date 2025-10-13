@@ -7,7 +7,7 @@ from sqlmodel import Session, delete
 from app.core.config import settings
 from app.core.db import engine, init_db
 from app.main import app
-from app.models import Item, User
+from app.models import Item, User, TradingView
 from tests.utils.user import authentication_token_from_email
 from tests.utils.utils import get_superuser_token_headers
 
@@ -17,11 +17,23 @@ def db() -> Generator[Session, None, None]:
     with Session(engine) as session:
         init_db(session)
         yield session
+        # 清理测试数据，但保留超级用户
+        statement = delete(TradingView)
+        session.execute(statement)
         statement = delete(Item)
         session.execute(statement)
-        statement = delete(User)
+        
+        # 只删除非超级用户，保留系统管理员
+        statement = delete(User).where(User.email != settings.FIRST_SUPERUSER)
         session.execute(statement)
         session.commit()
+        
+        # 确保超级用户仍然存在，如果不存在则重新创建
+        from sqlmodel import select
+        superuser = session.exec(select(User).where(User.email == settings.FIRST_SUPERUSER)).first()
+        if not superuser:
+            print("⚠️ 重新创建超级用户...")
+            init_db(session)
 
 
 @pytest.fixture(scope="module")
