@@ -19,17 +19,17 @@ depends_on = None
 
 
 def upgrade():
-    # Ensure uuid-ossp extension is available
-    op.execute('CREATE EXTENSION IF NOT EXISTS "uuid-ossp"')
+    # Use PostgreSQL 14+ built-in UUID generation function instead of uuid-ossp extension
+    # No need to install extension, gen_random_uuid() is built-in
 
     # Create a new UUID column with a default UUID value
-    op.add_column('user', sa.Column('new_id', postgresql.UUID(as_uuid=True), default=sa.text('uuid_generate_v4()')))
-    op.add_column('item', sa.Column('new_id', postgresql.UUID(as_uuid=True), default=sa.text('uuid_generate_v4()')))
+    op.add_column('user', sa.Column('new_id', postgresql.UUID(as_uuid=True), default=sa.text('gen_random_uuid()')))
+    op.add_column('item', sa.Column('new_id', postgresql.UUID(as_uuid=True), default=sa.text('gen_random_uuid()')))
     op.add_column('item', sa.Column('new_owner_id', postgresql.UUID(as_uuid=True), nullable=True))
 
     # Populate the new columns with UUIDs
-    op.execute('UPDATE "user" SET new_id = uuid_generate_v4()')
-    op.execute('UPDATE item SET new_id = uuid_generate_v4()')
+    op.execute('UPDATE "user" SET new_id = gen_random_uuid()')
+    op.execute('UPDATE item SET new_id = gen_random_uuid()')
     op.execute('UPDATE item SET new_owner_id = (SELECT new_id FROM "user" WHERE "user".id = item.owner_id)')
 
     # Set the new_id as not nullable
