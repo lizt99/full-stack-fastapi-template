@@ -30,6 +30,9 @@ class Settings(BaseSettings):
         env_ignore_empty=True,
         extra="ignore",
     )
+    
+    # 模块配置
+    ENABLED_MODULES: list[str] = ["core", "items", "tradingview"]
     API_V1_STR: str = "/api/v1"
     SECRET_KEY: str = secrets.token_urlsafe(32)
     # 60 minutes * 24 hours * 8 days = 8 days

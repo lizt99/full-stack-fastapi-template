@@ -21,9 +21,7 @@ logger = logging.getLogger(__name__)
 
 
 def custom_generate_unique_id(route: APIRoute) -> str:
-    if route.tags and len(route.tags) > 0:
-        return f"{route.tags[0]}-{route.name}"
-    return route.name
+    return f"{route.tags[0]}-{route.name}"
 
 
 @asynccontextmanager
@@ -68,12 +66,6 @@ async def initialize_modules():
         logger.info("TradingView模块已注册")
     
     logger.info(f"共注册了 {len(registry.modules)} 个模块")
-    
-    # 注册所有启用模块的路由
-    logger.info("注册模块路由...")
-    for router in registry.get_active_routers():
-        app.include_router(router, prefix=settings.API_V1_STR)
-    logger.info(f"路由注册完成，共注册 {len(registry.get_active_routers())} 个路由器")
 
 
 async def run_module_migrations():
@@ -118,7 +110,16 @@ if settings.all_cors_origins:
     )
 
 
-# 路由注册已移到 initialize_modules() 函数中
+@app.on_event("startup")
+async def startup_event():
+    """启动事件 - 注册所有启用模块的路由"""
+    logger.info("注册模块路由...")
+    
+    # 获取所有启用的路由并注册
+    for router in registry.get_active_routers():
+        app.include_router(router, prefix=settings.API_V1_STR)
+    
+    logger.info(f"路由注册完成，共注册 {len(registry.get_active_routers())} 个路由器")
 
 
 @app.get("/")
